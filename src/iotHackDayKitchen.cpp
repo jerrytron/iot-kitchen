@@ -1,5 +1,5 @@
 #include <Arduino.h>
-//#include "iotHackDayKitchen.h"
+#include "iotHackDayKitchen.h"
 #include "Adafruit_NeoPixel.h"
 #include "LPD8806.h"
 #include <Servo.h>
