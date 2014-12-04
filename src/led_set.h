@@ -159,6 +159,7 @@ class LedSet
 		Adafruit_NeoPixel* _ledSet;
 		Led* _leds;
 		uint16_t _ledCount;
+		ElapsedMillis _updateTime;
 
 };
 

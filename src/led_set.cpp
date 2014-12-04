@@ -24,7 +24,10 @@ void LedSet::initialize(uint16_t aLedCount, uint8_t aLedPin, uint8_t aLedType) {
 
 void LedSet::updateState() {
 	if (this->active) {
-		updateLeds();
+		if (_updateTime >= 10) {
+			updateLeds();
+			_updateTime = 0;
+		}
 	}
 }
 
@@ -58,6 +61,7 @@ void LedSet::setAllColors(Color aColor) {
 }
 
 void LedSet::setOff(uint16_t aLedIndex) {
+	_leds[aLedIndex].anim.repeatForever = false;
 	setColor(aLedIndex, Color(0, 0, 0));
 }
 
@@ -143,6 +147,7 @@ void LedSet::animateLed(uint8_t aLedIndex, Animation aAnimation, bool aFromCurre
 		_leds[aLedIndex].state = LED_ANIMATING;
 	}
 	_leds[aLedIndex].anim = aAnimation;
+	_leds[aLedIndex].elapsedTime = 0;
 }
 
 void LedSet::animateSet(int aLedIndexes[], Animation aAnims[], uint8_t aLength, uint32_t aDelayBetween, bool aFromCurrentColor) {
@@ -267,7 +272,7 @@ Color LedSet::calculateEase(EaseType aEase, float aCurrentFrame, float aEndFrame
 				color = aEnd;
 			}
 			break;
-		/*case EASE_QUAD_IN:
+		case EASE_QUAD_IN:
 			color.red = easeQuadraticIn(aCurrentFrame, aEndFrame, aStart.red, redChange);
 			color.green = easeQuadraticIn(aCurrentFrame, aEndFrame, aStart.green, greenChange);
 			color.blue = easeQuadraticIn(aCurrentFrame, aEndFrame, aStart.blue, blueChange);
@@ -371,7 +376,7 @@ Color LedSet::calculateEase(EaseType aEase, float aCurrentFrame, float aEndFrame
 			color.red = easeCircularInOut(aCurrentFrame, aEndFrame, aStart.red, redChange);
 			color.green = easeCircularInOut(aCurrentFrame, aEndFrame, aStart.green, greenChange);
 			color.blue = easeCircularInOut(aCurrentFrame, aEndFrame, aStart.blue, blueChange);
-			break;*/
+			break;
 	}
 
 	/*Serial.print("R: ");
