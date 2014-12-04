@@ -147,6 +147,7 @@ void setup() {
   pinMode(touchThreePin, INPUT);
   pinMode(touchFourPin, INPUT);
 
+  clockServo.writeMicroseconds(1475);
   clockServo.attach(9);
 
   gameSetup();
