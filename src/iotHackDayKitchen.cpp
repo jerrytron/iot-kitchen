@@ -1,10 +1,10 @@
 #include <Arduino.h>
 //#include "iotHackDayKitchen.h"
 #include "Adafruit_NeoPixel.h"
-#include "LPD8806.h"
 #include <Servo.h>
 #include "SimpleTimer.h"
 #include "SPI.h"
+#include "led_set.h"
 
 int ledTimerId = 0;
 uint8_t ledIndex = 0;
@@ -12,7 +12,7 @@ uint16_t ledTimeout = 1000;
 
 SimpleTimer timer;
 int timerId = 0;
-uint16_t timeoutTime = 5000;
+uint16_t timeoutTime = 10000;
 uint8_t success = 0;
 uint8_t failed = 0;
 
@@ -35,14 +35,15 @@ int valL = 0;       // variable to store the value coming from the sensor
 int valR = 0;       // variable to store the value coming from the sensor
 
 int waterTimerId = 0;
-uint16_t waterTimeout = 2500;
+uint16_t waterTimeout = 5000;
 int waterSwitchPin = 7;
 int waterOn = 0;
 bool waterHot = false;
 bool waterFilled = false;
 
 int waterLEDPin = 11;
-Adafruit_NeoPixel waterLEDStrip = Adafruit_NeoPixel(3, waterLEDPin, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel setOne = Adafruit_NeoPixel(3, waterLEDPin, NEO_GRB + NEO_KHZ800);
+LedSet waterLEDStrip = LedSet();
 
 uint8_t touchOnePin = 14;
 uint8_t touchTwoPin = 15;
@@ -63,20 +64,20 @@ const uint8_t kStepStateWait = 3;
 // LED Indexes
 const uint8_t kStoveLEDIndex = 0;
 const uint8_t kFaucetLEDIndex = 1;
-
-const uint8_t kCarrotLEDIndex = 3;
-const uint8_t kEggplantLEDIndex = 4;
-const uint8_t kCucumberLEDIndex = 5;
-const uint8_t kPotatoLEDIndex = 6;
-const uint8_t kPepperLEDIndex = 7;
-const uint8_t kCornLEDIndex = 8;
-const uint8_t kStatusLEDIndex = 9;
+const uint8_t kCarrotLEDIndex = 2;
+const uint8_t kEggplantLEDIndex = 3;
+const uint8_t kCucumberLEDIndex = 4;
+const uint8_t kPotatoLEDIndex = 5;
+const uint8_t kPepperLEDIndex = 6;
+const uint8_t kCornLEDIndex = 7;
+const uint8_t kStatusLEDIndex = 8;
 
 uint8_t veggies[] = { kCarrotLEDIndex, kEggplantLEDIndex, kCucumberLEDIndex, kPotatoLEDIndex, kPepperLEDIndex, kCornLEDIndex };
 //uint8_t veggies[] = { 6, 13, 5, 10, 9, 11 };
 
 uint8_t stoveTemp = 0;
 uint8_t useWater = 0;
+uint8_t oldWater = 0;
 uint8_t veggieOne = 0;
 uint8_t veggieTwo = 0;
 uint8_t veggieThree = 0;
@@ -85,19 +86,19 @@ uint8_t veggieFour = 0;
 uint8_t gameStep = 0;
 uint8_t stepState = 0;
 
-int statusDataPin  = 23;
-int statusClockPin = 22;
-LPD8806 statusStrip = LPD8806(10, statusDataPin, statusClockPin);
+int statusLEDPin = 22;
+//Adafruit_NeoPixel setTwo = Adafruit_NeoPixel(9, statusLEDPin, NEO_GRB + NEO_KHZ800);
+LedSet statusStrip = LedSet();
 
 void shuffle(uint8_t *aArray, uint8_t aElements);
 void succeeded();
 void timedOut();
 void ledTimedOut();
 void waterTimedOut();
-void colorWipe(Adafruit_NeoPixel strip, uint32_t c);
-void statusColorWipe(LPD8806 strip, uint32_t c);
-void theaterChase(Adafruit_NeoPixel strip, uint32_t c, uint8_t wait);
+//void colorWipe(Adafruit_NeoPixel strip, uint32_t c);
+//void theaterChase(Adafruit_NeoPixel strip, uint32_t c, uint8_t wait);
 void resetGame();
+void updateFaucet();
 
 // touch
 uint8_t oldTouches = 0;
@@ -134,7 +135,7 @@ void turnOffVeggieLeds();
 void printBinary(uint8_t aValue);
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(19200);
 
   randomSeed(analogRead(A0) + analogRead(A1));
 
@@ -166,28 +167,33 @@ void setup() {
   //ledTimerId = timer.setTimeout(ledTimeout, ledTimedOut);
   //waterTimerId = timer.setTimeout(waterTimeout, waterTimedOut);
 
-  waterLEDStrip.begin();
-  waterLEDStrip.show();
+  waterLEDStrip.initialize(3, waterLEDPin, NEO_GRB + NEO_KHZ800);
+  statusStrip.initialize(9, statusLEDPin, NEO_GRB + NEO_KHZ800);
+  //waterLEDStrip.begin();
+  //waterLEDStrip.show();
   //colorWipe(waterLEDStrip, waterLEDStrip.Color(0, 0, 255));
 
-  statusStrip.begin();
-  statusStrip.show();
-  //statusColorWipe(statusStrip, waterLEDStrip.Color(0, 0, 255));
+  //statusStrip.begin();
+  timerId = timer.setTimeout(timeoutTime, timedOut);
+  timer.disable(timerId);
 }
 
 void loop() {
   timer.run();
+  updateFaucet();
+  waterLEDStrip.updateState();
+  statusStrip.updateState();
   touchLoop();
   if (gameStep == 0) {
     if (stepState == kStepStateStart) {
       Serial.println("STOVE");
       timerId = timer.setTimeout(timeoutTime, timedOut);
       if (stoveTemp == kStoveMedium) {
-        statusStrip.setPixelColor(kStoveLEDIndex, statusStrip.Color(127, 0, 127));
+        statusStrip.setColor(kStoveLEDIndex, Color(127, 50, 0));
       } else if (stoveTemp == kStoveHot) {
-        statusStrip.setPixelColor(kStoveLEDIndex, statusStrip.Color(127, 0, 0));
+        statusStrip.setColor(kStoveLEDIndex, Color(127, 0, 0));
       }
-      statusStrip.show();
+
       stepState = kStepStateLoop;
     } else if (stepState == kStepStateLoop) {
       uint16_t potLVal = analogRead(potPinL);
@@ -207,8 +213,8 @@ void loop() {
       }
 
     } else if (stepState == kStepStateEnd) {
-      statusStrip.setPixelColor(kStoveLEDIndex, statusStrip.Color(0, 0, 0));
-      statusStrip.show();
+      statusStrip.setColor(kStoveLEDIndex, Color(0, 0, 0));
+
       stepState = kStepStateStart;
       gameStep++;
     }
@@ -218,29 +224,40 @@ void loop() {
       timerId = timer.setTimeout(timeoutTime, timedOut);
       if (useWater) {
         Serial.println("WATER");
-        statusStrip.setPixelColor(kFaucetLEDIndex, statusStrip.Color(0, 127, 0));
+        statusStrip.setColor(kFaucetLEDIndex, Color(0, 0, 127));
       } else {
         Serial.print("VEGGIE 1: ");
         Serial.println(veggies[0]);
-        statusStrip.setPixelColor(veggies[0], statusStrip.Color(0, 0, 127));
+        statusStrip.setColor(veggies[0], Color(0, 127, 0));
       }
-      statusStrip.show();
+
       stepState =  kStepStateLoop;
     } else if (stepState == kStepStateLoop) {
       if (useWater) {
-        uint8_t oldValue = waterOn;
+        /*uint8_t oldValue = waterOn;
         waterOn = digitalRead(waterSwitchPin);
 
         if (waterOn && (waterOn != oldValue)) {
           Serial.println("Water turned on.");
           waterTimerId = timer.setTimeout(waterTimeout, waterTimedOut);
-          theaterChase(waterLEDStrip, waterLEDStrip.Color(0, 0, 127), 0); // Blue
-        }
+          Animation water = {};
+          water.startColor = Color(127, 127, 127);
+          water.endColor = Color(0, 0, 127);
+          water.repeats = 0;
+          water.yoyo = false;
+          water.tweenTime = 400;
+          water.delayTime = 0;
+          water.repeatDelay = 0;
+          water.ease = EASE_LINEAR;
+          water.repeatForever = true;
+          waterLEDStrip.animateAll(water, true, 100);
+          //theaterChase(waterLEDStrip, Color(0, 0, 127), 0); // Blue
+        }*/
         if (waterOn && !waterHot && (touches > 0)) {
           Serial.println("Cold water filled!");
           waterFilled = true;
         }
-        if (!waterOn && waterFilled && (waterOn != oldValue)) {
+        if (!waterOn && waterFilled && (waterOn != oldWater)) {
           Serial.println("Water turned off!");
           succeeded();
         }
@@ -254,13 +271,13 @@ void loop() {
     } else if (stepState == kStepStateEnd) {
       //timer.disable(waterTimerId);
       waterFilled = false;
-      waterHot = false;
+      //waterHot = false;
       if (useWater) {
-        statusStrip.setPixelColor(kFaucetLEDIndex, statusStrip.Color(0, 0, 0));
+        statusStrip.setColor(kFaucetLEDIndex, Color(0, 0, 0));
       } else {
-        statusStrip.setPixelColor(veggies[0], statusStrip.Color(0, 0, 0));
+        statusStrip.setColor(veggies[0], Color(0, 0, 0));
       }
-      statusStrip.show();
+
       stepState = kStepStateStart;
       gameStep++;
     }
@@ -269,8 +286,8 @@ void loop() {
       Serial.print("VEGGIE 2: ");
       Serial.println(veggies[1]);
       timerId = timer.setTimeout(timeoutTime, timedOut);
-      statusStrip.setPixelColor(veggies[1], statusStrip.Color(0, 0, 127));
-      statusStrip.show();
+      statusStrip.setColor(veggies[1], Color(0, 127, 0));
+
       stepState = kStepStateLoop;
     } else if (stepState == kStepStateLoop) {
       if (checkVeggies(veggieLEDToValue(veggies[1])) == 1) {
@@ -281,8 +298,8 @@ void loop() {
         timedOut();
       }
     } else if (stepState == kStepStateEnd) {
-      statusStrip.setPixelColor(veggies[1], statusStrip.Color(0, 0, 0));
-      statusStrip.show();
+      statusStrip.setColor(veggies[1], Color(0, 0, 0));
+
       stepState = kStepStateStart;
       gameStep++;
     }
@@ -290,8 +307,8 @@ void loop() {
     if (stepState == kStepStateStart) {
       Serial.print("VEGGIE 3: ");
       Serial.println(veggies[2]);
-      statusStrip.setPixelColor(veggies[2], statusStrip.Color(0, 0, 127));
-      statusStrip.show();
+      statusStrip.setColor(veggies[2], Color(0, 127, 0));
+
       timerId = timer.setTimeout(timeoutTime, timedOut);
       stepState = kStepStateLoop;
     } else if (stepState == kStepStateLoop) {
@@ -303,8 +320,8 @@ void loop() {
         timedOut();
       }
     } else if (stepState == kStepStateEnd) {
-      statusStrip.setPixelColor(veggies[2], statusStrip.Color(0, 0, 0));
-      statusStrip.show();
+      statusStrip.setColor(veggies[2], Color(0, 0, 0));
+
       stepState = kStepStateStart;
       gameStep++;
     }
@@ -313,8 +330,8 @@ void loop() {
       Serial.print("VEGGIE 4: ");
       Serial.println(veggies[3]);
       timerId = timer.setTimeout(timeoutTime, timedOut);
-      statusStrip.setPixelColor(veggies[3], statusStrip.Color(0, 0, 127));
-      statusStrip.show();
+      statusStrip.setColor(veggies[3], Color(0, 127, 0));
+
       stepState = kStepStateLoop;
     } else if (stepState == kStepStateLoop) {
       if (checkVeggies(veggieLEDToValue(veggies[3])) == 1) {
@@ -325,8 +342,8 @@ void loop() {
         timedOut();
       }
     } else if (stepState == kStepStateEnd) {
-      statusStrip.setPixelColor(veggies[3], statusStrip.Color(0, 0, 0));
-      statusStrip.show();
+      statusStrip.setColor(veggies[3], Color(0, 0, 0));
+
       stepState = kStepStateStart;
       gameStep++;
     }
@@ -334,8 +351,7 @@ void loop() {
     if (stepState == kStepStateStart) {
       Serial.println("STOVE OFF");
       timerId = timer.setTimeout(timeoutTime, timedOut);
-      statusStrip.setPixelColor(kStoveLEDIndex, statusStrip.Color(0, 127, 0));
-      statusStrip.show();
+      statusStrip.setColor(kStoveLEDIndex, Color(0, 0, 127));
       stepState = kStepStateLoop;
     } else if (stepState == kStepStateLoop) {
       uint16_t potLVal = analogRead(potPinL);
@@ -346,8 +362,8 @@ void loop() {
         succeeded();
       }
     } else if (stepState == kStepStateEnd) {
-      statusStrip.setPixelColor(kStoveLEDIndex, statusStrip.Color(0, 0, 0));
-      statusStrip.show();
+      statusStrip.setColor(kStoveLEDIndex, Color(0, 0, 0));
+
       stepState = kStepStateStart;
       gameStep++;
     }
@@ -355,30 +371,41 @@ void loop() {
     timerId = timer.setTimeout(timeoutTime, timedOut);
     if (stepState == kStepStateStart) {
       Serial.println("HOT WATER");
-      statusStrip.setPixelColor(kFaucetLEDIndex, statusStrip.Color(127, 0, 0));
-      statusStrip.show();
+      statusStrip.setColor(kFaucetLEDIndex, Color(127, 0, 0));
+
       stepState = kStepStateLoop;
     } else if (stepState == kStepStateLoop) {
-      uint8_t oldValue = waterOn;
+      /*uint8_t oldValue = waterOn;
       waterOn = digitalRead(waterSwitchPin);
 
       if (waterOn && (waterOn != oldValue)) {
         waterTimerId = timer.setTimeout(waterTimeout, waterTimedOut);
-        theaterChase(waterLEDStrip, waterLEDStrip.Color(0, 0, 127), 0); // Blue
-      }
+        Animation water = {};
+        water.startColor = Color(127, 127, 127);
+        water.endColor = Color(0, 0, 127);
+        water.repeats = 0;
+        water.yoyo = false;
+        water.tweenTime = 400;
+        water.delayTime = 0;
+        water.repeatDelay = 0;
+        water.ease = EASE_LINEAR;
+        water.repeatForever = true;
+        waterLEDStrip.animateAll(water, true, 100);
+        //theaterChase(waterLEDStrip, Color(0, 0, 127), 0); // Blue
+      }*/
       if (waterOn && waterHot && (touches > 0)) {
         Serial.println("Hot water filled!");
         waterFilled = true;
       }
-      if (!waterOn && waterFilled && (waterOn != oldValue)) {
+      if (!waterOn && waterFilled && (waterOn != oldWater)) {
         succeeded();
       }
     } else if (stepState == kStepStateEnd) {
       //timer.disable(waterTimerId);
       waterFilled = false;
-      waterHot = false;
-      statusStrip.setPixelColor(kFaucetLEDIndex, statusStrip.Color(0, 0, 0));
-      statusStrip.show();
+      //waterHot = false;
+      statusStrip.setColor(kFaucetLEDIndex, Color(0, 0, 0));
+
       stepState = kStepStateStart;
       gameStep++;
     }
@@ -418,6 +445,36 @@ void loop() {
   //delay(15);
 }
 
+void updateFaucet() {
+  oldWater = waterOn;
+  waterOn = digitalRead(waterSwitchPin);
+
+  if (waterOn && (waterOn != oldWater)) {
+    waterHot = false;
+    Serial.println("Water on");
+    waterTimerId = timer.setTimeout(waterTimeout, waterTimedOut);
+    Animation water = {};
+    water.startColor = Color(160, 160, 160);
+    water.endColor = Color(0, 0, 255);
+    water.repeats = 0;
+    water.yoyo = false;
+    water.tweenTime = 400;
+    water.delayTime = 0;
+    water.repeatDelay = 0;
+    water.ease = EASE_LINEAR;
+    water.repeatForever = true;
+    waterLEDStrip.animateAll(water, true, 100);
+    //theaterChase(waterLEDStrip, Color(0, 0, 127), 0); // Blue
+  } else if (!waterOn && (!waterOn != oldWater)) {
+    if (timer.isEnabled(waterTimerId)) {
+      timer.disable(waterTimerId);
+    }
+    waterLEDStrip.killAllAnims();
+    waterLEDStrip.setAllOff();
+    waterHot = false;
+  }
+}
+
 // TODO!!!!
 void resetGame() {
   waterHot = 0;
@@ -427,8 +484,8 @@ void resetGame() {
 void succeeded() {
   timer.disable(timerId);
   success++;
-  statusStrip.setPixelColor(kStatusLEDIndex, statusStrip.Color(0, 0, 127));
-  statusStrip.show();
+  statusStrip.setColor(kStatusLEDIndex, Color(0, 0, 127));
+
   ledIndex = gameStep;
   //timer.enable(ledTimerId);
   ledTimerId = timer.setTimeout(ledTimeout, ledTimedOut);
@@ -442,8 +499,8 @@ void timedOut() {
   failed++;
   identified = false;
   stepState = kStepStateWait;
-  statusStrip.setPixelColor(kStatusLEDIndex, statusStrip.Color(127, 0, 0));
-  statusStrip.show();
+  statusStrip.setColor(kStatusLEDIndex, Color(127, 0, 0));
+
   ledTimerId = timer.setTimeout(ledTimeout, ledTimedOut);
   //timer.disable(timerId);
 }
@@ -467,49 +524,53 @@ void waterTimedOut() {
   timer.disable(waterTimerId);
   Serial.println("Water now HOT.");
   waterHot = true;
-  theaterChase(waterLEDStrip, waterLEDStrip.Color(127, 0, 0), 0); // Red
+  Animation water = {};
+  water.startColor = Color(160, 160, 160);
+  water.endColor = Color(255, 0, 0);
+  water.repeats = 0;
+  water.yoyo = false;
+  water.tweenTime = 400;
+  water.delayTime = 0;
+  water.repeatDelay = 0;
+  water.ease = EASE_LINEAR;
+  water.repeatForever = true;
+  waterLEDStrip.animateAll(water, true, 100);
+  //theaterChase(waterLEDStrip, waterLEDStrip.Color(127, 0, 0), 0); // Red
 }
 
 void ledTimedOut() {
   Serial.println("LED Timeout");
   timer.disable(ledTimerId);
-  statusStrip.setPixelColor(kStatusLEDIndex, statusStrip.Color(0, 0, 0));
-  statusStrip.show();
+  statusStrip.setColor(kStatusLEDIndex, Color(0, 0, 0));
+
   stepState = kStepStateEnd;
 }
 
-void colorWipe(Adafruit_NeoPixel strip, uint32_t c) {
+/*void colorWipe(Adafruit_NeoPixel strip, uint32_t c) {
   for(uint16_t i=0; i<strip.numPixels(); i++) {
-      strip.setPixelColor(i, c);
+      strip.setColor(i, c);
       strip.show();
   }
-}
-
-void statusColorWipe(LPD8806 strip, uint32_t c) {
-  for(uint16_t i=0; i<strip.numPixels(); i++) {
-      strip.setPixelColor(i, c);
-      strip.show();
-  }
-}
+}*/
 
 // THIS NEEDS TO BE A NON-BLOCKING FUNCTION, MEANING NO DELAYS.
 // Must be rewritten to update over time in the main loop.
-void theaterChase(Adafruit_NeoPixel strip, uint32_t c, uint8_t wait) {
+/*void theaterChase(Adafruit_NeoPixel strip, uint32_t c, uint8_t wait) {
   for (uint8_t j=0; j<10; j++) {  //do 10 cycles of chasing
     for (uint8_t q=0; q < 3; q++) {
       for (uint8_t i=0; i < waterLEDStrip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, c);    //turn every third pixel on
+        strip.setColor(i+q, c);    //turn every third pixel on
       }
       strip.show();
 
       delay(wait);
 
       for (uint8_t i=0; i < strip.numPixels(); i=i+3) {
-        strip.setPixelColor(i+q, 0);        //turn every third pixel off
+        strip.setColor(i+q, 0);        //turn every third pixel off
       }
     }
   }
-}
+}*/
 
 //DigitalOut red(D5);
 //DigitalOut blue(D8);
@@ -660,52 +721,52 @@ uint8_t checkVeggies(uint8_t aVeggie) {
     if (!identified && (touches == kCarrot)) {
         identified = true;
         //turnOffVeggieLeds();
-        //statusStrip.setPixelColor(kCarrotLEDIndex, statusStrip.Color(0, 0, 127));
+        //statusStrip.setColor(kCarrotLEDIndex, Color(0, 0, 127));
         Serial.println("CARROT");
         result = (aVeggie == kCarrot) ? 1 : 0;
     } else if (!identified && (touches == kEggplant)) {
         identified = true;
         //turnOffVeggieLeds();
-        //statusStrip.setPixelColor(kEggplantLEDIndex, statusStrip.Color(0, 0, 127));
+        //statusStrip.setColor(kEggplantLEDIndex, Color(0, 0, 127));
         Serial.println("EGGPLANT");
         result = (aVeggie == kEggplant) ? 1 : 0;
     } else if (!identified && (touches == kCucumber)) {
         identified = true;
         //turnOffVeggieLeds();
-        //statusStrip.setPixelColor(kCucumberLEDIndex, statusStrip.Color(0, 0, 127));
+        //statusStrip.setColor(kCucumberLEDIndex, Color(0, 0, 127));
         Serial.println("CUCUMBER");
         result = (aVeggie == kCucumber) ? 1 : 0;
     } else if (!identified && (touches == kPotato)) {
         identified = true;
         //turnOffVeggieLeds();
-        //statusStrip.setPixelColor(kPotatoLEDIndex, statusStrip.Color(0, 0, 127));
+        //statusStrip.setColor(kPotatoLEDIndex, Color(0, 0, 127));
         Serial.println("POTATO");
         result = (aVeggie == kPotato) ? 1 : 0;
     } else if (!identified && (touches == kPepper)) {
         identified = true;
         //turnOffVeggieLeds();
-        //statusStrip.setPixelColor(kPepperLEDIndex, statusStrip.Color(0, 0, 127));
+        //statusStrip.setColor(kPepperLEDIndex, Color(0, 0, 127));
         Serial.println("PEPPER");
         result = (aVeggie == kPepper) ? 1 : 0;
     } else if (!identified && (touches == kCorn)) {
         identified = true;
         //turnOffVeggieLeds();
-        //statusStrip.setPixelColor(kCornLEDIndex, statusStrip.Color(0, 0, 127));
+        //statusStrip.setColor(kCornLEDIndex, Color(0, 0, 127));
         Serial.println("CORN");
         result = (aVeggie == kCorn) ? 1 : 0;
     }
-    //statusStrip.show();
+    //
     return result;
 }
 
 void turnOffVeggieLeds() {
-  statusStrip.setPixelColor(kCarrotLEDIndex, statusStrip.Color(0, 0, 0));
-  statusStrip.setPixelColor(kEggplantLEDIndex, statusStrip.Color(0, 0, 0));
-  statusStrip.setPixelColor(kCucumberLEDIndex, statusStrip.Color(0, 0, 0));
-  statusStrip.setPixelColor(kPotatoLEDIndex, statusStrip.Color(0, 0, 0));
-  statusStrip.setPixelColor(kPepperLEDIndex, statusStrip.Color(0, 0, 0));
-  statusStrip.setPixelColor(kCornLEDIndex, statusStrip.Color(0, 0, 0));
-  statusStrip.show();
+  statusStrip.setColor(kCarrotLEDIndex, Color(0, 0, 0));
+  statusStrip.setColor(kEggplantLEDIndex, Color(0, 0, 0));
+  statusStrip.setColor(kCucumberLEDIndex, Color(0, 0, 0));
+  statusStrip.setColor(kPotatoLEDIndex, Color(0, 0, 0));
+  statusStrip.setColor(kPepperLEDIndex, Color(0, 0, 0));
+  statusStrip.setColor(kCornLEDIndex, Color(0, 0, 0));
+
 }
 
 void printBinary(uint8_t aValue) {
