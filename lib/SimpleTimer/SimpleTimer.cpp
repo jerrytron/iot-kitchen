@@ -135,6 +135,10 @@ int SimpleTimer::setTimer(long d, timer_callback f, int n) {
     int freeTimer;
 
     freeTimer = findFirstFreeSlot();
+    Serial.print("New Timer: ");
+    Serial.print(d);
+    Serial.print(", at: ");
+    Serial.println(freeTimer);
     if (freeTimer < 0) {
         return -1;
     }
@@ -166,6 +170,8 @@ int SimpleTimer::setTimeout(long d, timer_callback f) {
 
 
 void SimpleTimer::deleteTimer(int timerId) {
+    Serial.print("Delete Timer: ");
+    Serial.println(timerId);
     if (timerId >= MAX_TIMERS) {
         return;
     }

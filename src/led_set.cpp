@@ -236,6 +236,7 @@ void LedSet::updateLeds() {
 							_leds[i].state = LED_REPEAT_DELAY;
 						}
 					} else {
+						_leds[i].anim.animComplete = true;
 						_leds[i].anim.startColor = _leds[i].anim.endColor;
 						_leds[i].state = LED_IDLE;
 					}

@@ -85,6 +85,7 @@ typedef struct Animation_t {
 	uint16_t repeats = 0;
 	bool repeatForever = false;
 	bool yoyo = false;
+	bool animComplete = false;
 } Animation;
 
 typedef struct Led_t {
