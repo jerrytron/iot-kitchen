@@ -147,7 +147,9 @@ void setup() {
   pinMode(touchThreePin, INPUT);
   pinMode(touchFourPin, INPUT);
 
-  clockServo.attach(9);
+  //clockServo.writeMicroseconds(1475);
+  //clockServo.writeMicroseconds(1575);
+  //clockServo.attach(9);
 
   gameSetup();
 }
@@ -522,7 +524,7 @@ void succeeded() {
 
   identified = false;
   stepState = kStepStateWait;
-  statusStrip.setColor(kStatusLEDIndex, Color(0, 0, 127));
+  statusStrip.setColor(kStatusLEDIndex, Color(0, 127, 0));
 
   ledTimerId = timer.setTimeout(ledTimeout, ledTimedOut);
 }
